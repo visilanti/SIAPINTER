@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Interview } from "@/types";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { LoaderPage } from "./loader-page";
 import { doc, getDoc } from "firebase/firestore";
@@ -19,6 +20,7 @@ export const MockInterviewPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    setIsLoading(true);
     const fetchInterview = async () => {
       if (interviewId) {
         try {
@@ -31,6 +33,8 @@ export const MockInterviewPage = () => {
           }
         } catch (error) {
           console.log(error);
+        } finally {
+          setIsLoading(false);
         }
       }
     };
