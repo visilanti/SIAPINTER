@@ -110,13 +110,21 @@ export const RecordAnswer = ({
     userAns: string
   ): Promise<AIResponse> => {
     setIsAiGenerating(true);
+    // const prompt = `
+    //   Question: "${qst}"
+    //   User Answer: "${userAns}"
+    //   Correct Answer: "${qstAns}"
+    //   Please compare the user's answer to the correct answer, and provide a rating (from 1 to 10) based on answer quality, and offer feedback for improvement.
+    //   Return the result in JSON format with the fields "ratings" (number) and "feedback" (string).
+    // `;
     const prompt = `
-      Question: "${qst}"
-      User Answer: "${userAns}"
-      Correct Answer: "${qstAns}"
-      Please compare the user's answer to the correct answer, and provide a rating (from 1 to 10) based on answer quality, and offer feedback for improvement.
-      Return the result in JSON format with the fields "ratings" (number) and "feedback" (string).
-    `;
+      Pertanyaan: "${qst}"
+      Jawaban Pengguna: "${userAns}"
+      Jawaban yang Benar: "${qstAns}"
+      Silakan bandingkan jawaban pengguna dalam bahasa indonesia dengan jawaban yang benar secara ringkas dan mudah dipahami, lalu berikan penilaian dari skala 1 sampai 10 berdasarkan kualitas jawaban tersebut. Sertakan juga masukan yang membangun agar pengguna dapat memperbaiki jawabannya. hilangkan tanda * atau styling text semacamnya.
+
+      Kembalikan hasil dalam format JSON dengan field "ratings" (angka) dan "feedback" (teks).
+    `
 
     try {
       const aiResult = await chatSession.sendMessage(prompt);

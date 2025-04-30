@@ -14,6 +14,7 @@ import { CreateEditPage } from "./routes/create-edit-page";
 import { MockLoadPage } from "./routes/mock-load-page";
 import { MockInterviewPage } from "./routes/mock-interview-page";
 import { Feedback } from "./routes/feedback";
+import JobsPage from "@/routes/jobspage"; 
 
 const App = () => {
   return (
@@ -22,6 +23,7 @@ const App = () => {
         {/* public routes */}
         <Route element={<PublicLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="/lowongan" element={<JobsPage />} />
         </Route>
 
         {/* authentication layout */}
