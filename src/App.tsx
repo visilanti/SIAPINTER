@@ -15,6 +15,7 @@ import { MockLoadPage } from "./routes/mock-load-page";
 import { MockInterviewPage } from "./routes/mock-interview-page";
 import { Feedback } from "./routes/feedback";
 import JobsPage from "@/routes/jobspage"; 
+import StarMethodBlog from "./components/ui/blog";
 
 const App = () => {
   return (
@@ -24,6 +25,7 @@ const App = () => {
         <Route element={<PublicLayout />}>
           <Route index element={<HomePage />} />
           <Route path="/lowongan" element={<JobsPage />} />
+          <Route path="/blog" element={<StarMethodBlog />} />
         </Route>
 
         {/* authentication layout */}

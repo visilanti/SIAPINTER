@@ -29,6 +29,7 @@ import {
   doc,
   serverTimestamp,
   updateDoc,
+  deleteDoc
 } from "firebase/firestore";
 import { db } from "@/config/firebase.config";
 
@@ -45,7 +46,7 @@ const formSchema = z.object({
   experience: z.coerce
     .number()
     .min(0, "Experience cannot be empty or negative"),
-  techStack: z.string().min(1, "Tech stack must be at least a character"),
+  techStack: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -71,112 +72,138 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
     ? { title: "Updated..!", description: "Changes saved successfully..." }
     : { title: "Created..!", description: "New Mock Interview created..." };
 
-  const cleanAiResponse = (responseText: string) => {
-    // Step 1: Trim any surrounding whitespace
-    let cleanText = responseText.trim();
-
-    // Step 2: Remove any occurrences of "json" or code block symbols (``` or `)
-    cleanText = cleanText.replace(/(json|```|`)/g, "");
-
-    // Step 3: Extract a JSON array by capturing text between square brackets
-    const jsonArrayMatch = cleanText.match(/\[.*\]/s);
-    if (jsonArrayMatch) {
-      cleanText = jsonArrayMatch[0];
-    } else {
-      throw new Error("No JSON array found in response");
+  function cleanAiResponse(raw: string): { question: string }[] {
+    const lines = raw
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && /^[0-9]+[\.\)]/.test(line)); // Filter hanya baris bernomor
+    
+    const questions = lines.map(line => {
+      // Hilangkan nomor di depan (misal: "1. " atau "1)" jadi "")
+      const questionText = line.replace(/^[0-9]+[\.\)]\s*/, '').trim();
+      return { question: questionText };
+    });
+    
+    if (questions.length === 0) {
+      throw new Error('No valid question array found in response');
     }
+    
+    return questions;
+  }
+  
+  const fetchQuestionsFromApi = async (data: { position: string; description: string }) => {
+    const payload = {
+      job_title: data.position,
+      job_description: data.description,
+    };
 
-    // Step 4: Parse the clean JSON text into an array of objects
     try {
-      return JSON.parse(cleanText);
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch questions from API: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      // Normalisasi `generated_output` menjadi string jika berupa array
+      const generatedOutput = Array.isArray(result.generated_output)
+        ? result.generated_output.join('\n')
+        : result.generated_output;
+
+      if (!generatedOutput || typeof generatedOutput !== "string") {
+        throw new Error("API response does not contain a valid 'generated_output'");
+      }
+
+      return cleanAiResponse(generatedOutput);
     } catch (error) {
-      throw new Error("Invalid JSON format: " + (error as Error)?.message);
+      console.error("Error fetching questions:", error);
+      throw error;
     }
   };
 
-  const generateAiResponse = async (data: FormData) => {
-    // const prompt = `
-    //     As an experienced prompt engineer, generate a JSON array containing 5 interview questions along with detailed answers based on the following job information. Each object in the array should have the fields "question" and "answer", formatted as follows:
+  const generateAnswersForQuestions = async (questions: { question: string }[], data: FormData) => {
+    const answers = [];
+  
+    for (const item of questions) {
+      const prompt = `
+      Buatlah jawaban wawancara menggunakan metode STAR (Situation, Task, Action, Result), langsung pada inti jawaban tanpa kalimat pembuka atau penutup, dan tanpa format penekanan teks seperti bold atau italic:
 
-    //     [
-    //       { "question": "<Question text>", "answer": "<Answer text>" },
-    //       ...
-    //     ]
+      - Posisi Pekerjaan: ${data.position}
+      - Deskripsi Pekerjaan: ${data.description}
+      - Pengalaman yang Dibutuhkan: ${data.experience} tahun
+      - Teknologi yang Digunakan jika ada: ${data.techStack}
 
-    //     Job Information:
-    //     - Job Position: ${data?.position}
-    //     - Job Description: ${data?.description}
-    //     - Years of Experience Required: ${data?.experience}
-    //     - Tech Stacks: ${data?.techStack}
-
-    //     The questions should assess skills in ${data?.techStack} development and best practices, problem-solving, and experience handling complex requirements. Please format the output strictly as an array of JSON objects without any additional labels, code blocks, or explanations. Return only the JSON array with questions and answers.
-    //     `;
-
-    const prompt = `
-    Sebagai seorang HR yang berpengalaman, buatlah sebuah array JSON yang berisi 5 pertanyaan wawancara dalam bahasa indonesia beserta jawaban lengkap berdasarkan informasi pekerjaan berikut. Setiap objek dalam array harus memiliki field "question" dan "answer", dengan format sebagai berikut:
-
-    [
-      { "question": "<Teks pertanyaan>", "answer": "<Teks jawaban>" },
-      ...
-    ]
-
-    Informasi Pekerjaan:
-    - Posisi Pekerjaan: ${data?.position}
-    - Deskripsi Pekerjaan: ${data?.description}
-    - Pengalaman yang Dibutuhkan: ${data?.experience} tahun
-    - Teknologi yang Digunakan: ${data?.techStack}
-
-    Pertanyaan wawancara harus menguji kemampuan dalam pengembangan menggunakan ${data?.techStack} dan praktik terbaik, kemampuan pemecahan masalah, serta pengalaman dalam menangani kebutuhan proyek yang kompleks. Format output harus berupa array objek JSON tanpa label tambahan, blok kode, atau penjelasan lain. Hanya kembalikan array JSON berisi pertanyaan dan jawaban.
-`;
-
-    const aiResult = await chatSession.sendMessage(prompt);
-    const cleanedResponse = cleanAiResponse(aiResult.response.text());
-
-    return cleanedResponse;
+      Pertanyaan: ${item.question}
+      Jawaban (gunakan metode STAR):
+      `;
+      const aiResult = await chatSession.sendMessage(prompt);
+      const cleanedAnswer = aiResult.response.text().trim();
+      answers.push({ question: item.question, answer: cleanedAnswer });
+    }
+  
+    return answers;
   };
 
   const onSubmit = async (data: FormData) => {
     try {
       setLoading(true);
 
+      // Step 1: Generate questions using the external API
+      const questions = await fetchQuestionsFromApi({
+        position: data.position,
+        description: data.description,
+      });
+
+      // Step 2: Generate answers for the questions using the local model
+      const questionsWithAnswers = await generateAnswersForQuestions(questions, data);
+
       if (initialData) {
-        // update
-        if (isValid) {
-          const aiResult = await generateAiResponse(data);
-
-          await updateDoc(doc(db, "interviews", initialData?.id), {
-            questions: aiResult,
-            ...data,
-            updatedAt: serverTimestamp(),
-          }).catch((error) => console.log(error));
-          toast(toastMessage.title, { description: toastMessage.description });
-        }
+        // Update existing interview
+        await updateDoc(doc(db, "interviews", initialData.id), {
+          questions: questionsWithAnswers,
+          ...data,
+          updatedAt: serverTimestamp(),
+        });
+        toast(toastMessage.title, { description: toastMessage.description });
       } else {
-        // create a new mock interview
-        if (isValid) {
-          const aiResult = await generateAiResponse(data);
-
-          await addDoc(collection(db, "interviews"), {
-            ...data,
-            userId,
-            questions: aiResult,
-            createdAt: serverTimestamp(),
-          });
-
-          toast(toastMessage.title, { description: toastMessage.description });
-        }
+        // Create a new interview
+        await addDoc(collection(db, "interviews"), {
+          ...data,
+          userId,
+          questions: questionsWithAnswers,
+          createdAt: serverTimestamp(),
+        });
+        toast(toastMessage.title, { description: toastMessage.description });
       }
 
       navigate("/generate", { replace: true });
     } catch (error) {
-      console.log(error);
+      console.error(error);
       toast.error("Error..", {
-        description: `Something went wrong. Please try again later`,
+        description: "Something went wrong. Please try again later.",
       });
     } finally {
       setLoading(false);
     }
   };
+
+  const deleteInterview = async (id: string) => {
+  try {
+    await deleteDoc(doc(db, "interviews", id));
+    toast.success("Interview deleted successfully!");
+    navigate("/generate", { replace: true });
+  } catch (error) {
+    console.error("Error deleting interview:", error);
+    toast.error("Failed to delete interview. Please try again.");
+  }
+};
 
   useEffect(() => {
     if (initialData) {
@@ -200,10 +227,14 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
         <Headings title={title} isSubHeading />
 
         {initialData && (
-          <Button size={"icon"} variant={"ghost"}>
-            <Trash2 className="min-w-4 min-h-4 text-red-500" />
-          </Button>
-        )}
+        <Button
+          size={"icon"}
+          variant={"ghost"}
+          onClick={() => deleteInterview(initialData.id)} // Tambahkan logika penghapusan
+        >
+          <Trash2 className="min-w-4 min-h-4 text-red-500" />
+        </Button>
+      )}
       </div>
 
       <Separator className="my-4" />
@@ -288,7 +319,7 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
             render={({ field }) => (
               <FormItem className="w-full space-y-4">
                 <div className="w-full flex items-center justify-between">
-                  <FormLabel>Tech Stacks</FormLabel>
+                  <FormLabel>Tech Stacks (Optional)</FormLabel>
                   <FormMessage className="text-sm" />
                 </div>
                 <FormControl>
@@ -297,7 +328,7 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
                     disabled={loading}
                     placeholder="eg:- React, Typescript..."
                     {...field}
-                    value={field.value || ""}
+                    value={field.value || " "} 
                   />
                 </FormControl>
               </FormItem>

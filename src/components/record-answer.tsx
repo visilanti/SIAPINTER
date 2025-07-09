@@ -96,7 +96,13 @@ export const RecordAnswer = ({
     // Step 2: Remove any occurrences of "json" or code block symbols (``` or `)
     cleanText = cleanText.replace(/(json|```|`)/g, "");
 
-    // Step 3: Parse the clean JSON text into an array of objects
+    // Step 3: Remove invalid control characters
+    cleanText = cleanText.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+
+    // Step 4: Remove any remaining symbols like *, _, or other styling characters
+    cleanText = cleanText.replace(/[*_]/g, "");
+
+    // Step 5: Parse the clean JSON text into an object
     try {
       return JSON.parse(cleanText);
     } catch (error) {
@@ -110,35 +116,26 @@ export const RecordAnswer = ({
     userAns: string
   ): Promise<AIResponse> => {
     setIsAiGenerating(true);
-    // const prompt = `
-    //   Question: "${qst}"
-    //   User Answer: "${userAns}"
-    //   Correct Answer: "${qstAns}"
-    //   Please compare the user's answer to the correct answer, and provide a rating (from 1 to 10) based on answer quality, and offer feedback for improvement.
-    //   Return the result in JSON format with the fields "ratings" (number) and "feedback" (string).
-    // `;
     const prompt = `
       Pertanyaan: "${qst}"
       Jawaban Pengguna: "${userAns}"
       Jawaban yang Benar: "${qstAns}"
-      Silakan bandingkan jawaban pengguna dalam bahasa indonesia dengan jawaban yang benar secara ringkas dan mudah dipahami, lalu berikan penilaian dari skala 1 sampai 10 berdasarkan kualitas jawaban tersebut. Sertakan juga masukan yang membangun agar pengguna dapat memperbaiki jawabannya. hilangkan tanda * atau styling text semacamnya.
-
+      Bandingkan jawaban pengguna dalam bahasa Indonesia dengan jawaban yang benar secara dan nilai bagaimana jawaban mencakup setiap elemen STAR secara ringkas dan mudah dipahami. Berikan penilaian dari skala 1 sampai 10 berdasarkan kualitas struktur dan isi jawaban menurut metode STAR. Sertakan juga masukan yang membangun agar pengguna bisa memperbaiki jawabannya, dan sampaikan dengan gaya bahasa casual menggunakan kata "kamu". Hindari penggunaan tanda * atau styling teks lainnya.
+    
       Kembalikan hasil dalam format JSON dengan field "ratings" (angka) dan "feedback" (teks).
-    `
+    `;
 
     try {
       const aiResult = await chatSession.sendMessage(prompt);
 
+      // Bersihkan dan parse respons JSON
       const parsedResult: AIResponse = cleanJsonResponse(
-        aiResult.response.text()
+        await aiResult.response.text()
       );
       return parsedResult;
     } catch (error) {
-      console.log(error);
-      toast("Error", {
-        description: "An error occurred while generating feedback.",
-      });
-      return { ratings: 0, feedback: "Unable to generate feedback" };
+      console.error(error);
+      throw new Error("Failed to generate AI result.");
     } finally {
       setIsAiGenerating(false);
     }

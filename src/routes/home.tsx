@@ -1,4 +1,4 @@
-import { Folder, Paintbrush, Play, Sparkles } from "lucide-react";
+import { BookOpen, Folder, Paintbrush, Play, Sparkles } from "lucide-react";
 import Marquee from "react-fast-marquee";
 import {
   Accordion,
@@ -16,8 +16,12 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { useState } from "react";
+import { VideoModal } from "@/components/ui/videomodal";
 
 const HomePage = () => {
+  const [showVideo, setShowVideo] = useState(false);
+
   const steps = [
     {
       title: "Temukan Pekerjaan",
@@ -74,10 +78,16 @@ const HomePage = () => {
               Get Started <Sparkles />
             </Button>
           </Link>
-
-          <Button variant="outline" size="lg" className="w-full md:w-auto">
-            Watch Demo <Play />
-          </Button>
+          <Link to={"/"} className="w-full md:w-auto">
+            <VideoModal
+              videoId="zj-sHj5eSo0" // Ganti dengan ID video YouTube kamu
+              isOpen={showVideo}
+              onClose={() => setShowVideo(false)}
+            />
+            <Button variant="outline" size="lg" className="w-full md:w-auto" onClick={() => setShowVideo(true)}>
+              Watch Demo <Play />
+            </Button>
+          </Link>
         </div>
 
         {/* Tutorial pengguna */}
@@ -94,7 +104,7 @@ const HomePage = () => {
         </div>
 
         {/* Image Section */}
-        <div className="w-full mt-8 rounded-xl bg-gray-100 h-[300px] md:h-[420px] drop-shadow-md overflow-hidden relative px-4">
+        <div className="w-full mt-8 rounded-xl bg-gray-100 h-[300px] md:h-[420px] drop-shadow-md overflow-hidden relative">
           <img
             src="/assets/img/hero.jpg"
             alt=""
@@ -131,8 +141,7 @@ const HomePage = () => {
 
       <Container className="py-8 space-y-8 px-4">
         <h2 className="tracking-wide text-lg md:text-xl text-gray-800 font-semibold text-center md:text-left">
-          Tingkatkan kepercayaan diri Anda dengan latihan wawancara kerja yang
-          terarah dan dukungan AI yang cerdas.
+          Cara Menjawab Pertanyaan Wawancara Kerja dengan Metode STAR (Dan Kenapa Kamu Harus Coba Platform Siapinter!)
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
@@ -146,15 +155,14 @@ const HomePage = () => {
 
           <div className="col-span-1 md:col-span-2 flex flex-col items-center justify-center text-center gap-6">
             <p className="text-muted-foreground text-sm md:text-base">
-              Ubah cara Anda mempersiapkan diri, tingkatkan kepercayaan diri,
-              dan tingkatkan peluang Anda untuk mendapatkan pekerjaan impian.
-              Biarkan AI menjadi keunggulan Anda di pasar kerja yang kompetitif
-              saat ini.
+              Lagi siapin diri buat wawancara kerja? Udah belajar tentang company-nya, udah latihan perkenalan diri… tapi pas ditanya:
+              "Ceritakan pengalaman Anda dalam menyelesaikan masalah di tempat kerja."
+              Langsung nge-blank? 😵
             </p>
 
-            <Link to={"/generate"} className="w-full md:w-3/4">
+            <Link to={"/blog"} className="w-full md:w-3/4">
               <Button className="w-full">
-                Generate <Sparkles className="ml-2" />
+                Baca Selengkapnya <BookOpen className="ml-2" />
               </Button>
             </Link>
           </div>
